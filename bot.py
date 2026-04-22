@@ -22,7 +22,11 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+creds_json = json.loads(os.getenv("GOOGLE_CREDS"))
+
+creds = ServiceAccountCredentials.from_json_keyfile_dict(
+    creds_json, scope
+)
 client = gspread.authorize(creds)
 
 sheet = client.open("Учет расходов и доходов").sheet1
