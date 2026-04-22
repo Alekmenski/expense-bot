@@ -41,193 +41,200 @@ client = gspread.authorize(creds)
 sheet = client.open("Учет расходов и доходов").sheet1
 
 
-# --- МЕСЯЦЫ ---
-months_map = {
-    "январь": "01", "февраль": "02", "март": "03",
-    "апрель": "04", "май": "05", "июнь": "06",
-    "июль": "07", "август": "08", "сентябрь": "09",
-    "октябрь": "10", "ноябрь": "11", "декабрь": "12"
+# ====== КАТЕГОРИИ ======
+
+expense_categories = {
+    "🏠 ЖКХ": "ЖКХ",
+    "🛒 Продукты": "Продукты",
+    "💊 Лекарства": "Лекарства",
+    "🚗 Автомобиль": "Автомобиль",
+    "🎮 Развлечения": "Развлечения",
+    "👗 Одежда": "Одежда",
+    "🚌 Транспорт": "Транспорт",
+    "💄 Бьюти": "Бьюти",
+    "🍽 Обеды": "Обеды",
+    "📱 Связь": "Связь"
 }
 
+income_categories = {
+    "💼 ЗП Влад": "ЗП Влад",
+    "💰 Аванс Влад": "Аванс Влад",
+    "🎁 Премия Влад": "Премия Влад",
+    "💼 ЗП Настя": "ЗП Настя",
+    "💰 Аванс Настя": "Аванс Настя"
+}
 
-# --- КАТЕГОРИИ ---
-expense_categories = [
-    "🏠 ЖКХ","🛒 Продукты","💊 Лекарства","🚗 Автомобиль",
-    "🎉 Развлечения и отдых","👕 Одежда и обувь","🚌 Транспорт",
-    "💄 Бьюти","🍽 Обеды","📱 Связь","📦 Прочие расходы"
-]
+months_map = {
+    "Январь": 1, "Февраль": 2, "Март": 3,
+    "Апрель": 4, "Май": 5, "Июнь": 6,
+    "Июль": 7, "Август": 8, "Сентябрь": 9,
+    "Октябрь": 10, "Ноябрь": 11, "Декабрь": 12
+}
 
-income_categories = [
-    "💰 Влад Зарплата","💰 Влад Аванс","💰 Влад Премия",
-    "💰 Настя Зарплата","💰 Настя Аванс"
-]
+# ====== СОСТОЯНИЕ ======
+user_state = {}
 
+# ====== КНОПКИ ======
 
-# --- КЛАВИАТУРЫ ---
-main_keyboard = ReplyKeyboardMarkup(
+main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💸 Расходы"), KeyboardButton(text="💰 Доходы")],
-        [KeyboardButton(text="📅 Планируемые расходы")],
-        [KeyboardButton(text="🏦 Накопления")],
-        [KeyboardButton(text="📊 Баланс"), KeyboardButton(text="📅 Заработок за месяц")],
-        [KeyboardButton(text="📊 График расходов")]
+        [KeyboardButton(text="📊 Аналитика"), KeyboardButton(text="📅 Выбрать месяц")],
+        [KeyboardButton(text="📊 План vs Факт"), KeyboardButton(text="💼 Накопления")],
+        [KeyboardButton(text="📌 Планируемые расходы")]
     ],
     resize_keyboard=True
 )
 
-expense_keyboard = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🏠 ЖКХ"), KeyboardButton(text="🛒 Продукты")],
-        [KeyboardButton(text="💊 Лекарства"), KeyboardButton(text="🚗 Автомобиль")],
-        [KeyboardButton(text="🎉 Развлечения и отдых")],
-        [KeyboardButton(text="👕 Одежда и обувь"), KeyboardButton(text="🚌 Транспорт")],
-        [KeyboardButton(text="💄 Бьюти"), KeyboardButton(text="🍽 Обеды")],
-        [KeyboardButton(text="📱 Связь"), KeyboardButton(text="📦 Прочие расходы")],
-        [KeyboardButton(text="⬅️ Назад")]
-    ],
-    resize_keyboard=True
-)
+def make_keyboard(items):
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=i)] for i in items],
+        resize_keyboard=True
+    )
 
-income_keyboard = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="💰 Влад Зарплата"), KeyboardButton(text="💰 Влад Аванс")],
-        [KeyboardButton(text="💰 Влад Премия")],
-        [KeyboardButton(text="💰 Настя Зарплата"), KeyboardButton(text="💰 Настя Аванс")],
-        [KeyboardButton(text="⬅️ Назад")]
-    ],
-    resize_keyboard=True
-)
+# ====== START ======
 
-savings_keyboard = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="➕ Пополнить"), KeyboardButton(text="➖ Снять")],
-        [KeyboardButton(text="⬅️ Назад")]
-    ],
-    resize_keyboard=True
-)
+@dp.message(lambda m: m.text == "/start")
+async def start(message: types.Message):
+    await message.answer("Выберите действие:", reply_markup=main_kb)
 
+# ====== ВЫБОР РАЗДЕЛОВ ======
 
-# --- СОСТОЯНИЯ ---
-user_state = {}
-plan_mode_users = set()
-savings_mode = {}
+@dp.message(lambda m: m.text == "💸 Расходы")
+async def expenses(message: types.Message):
+    user_state[message.from_user.id] = {"type": "расход"}
+    await message.answer("Выбери категорию:", reply_markup=make_keyboard(expense_categories.keys()))
 
+@dp.message(lambda m: m.text == "💰 Доходы")
+async def income(message: types.Message):
+    user_state[message.from_user.id] = {"type": "доход"}
+    await message.answer("Выбери категорию:", reply_markup=make_keyboard(income_categories.keys()))
 
-# --- START ---
-@dp.message(Command("start"))
-async def start_handler(message: types.Message):
-    await message.answer("Выбери раздел 👇", reply_markup=main_keyboard)
+@dp.message(lambda m: m.text == "📌 Планируемые расходы")
+async def planned(message: types.Message):
+    user_state[message.from_user.id] = {"type": "план"}
+    await message.answer("Выбери категорию:", reply_markup=make_keyboard(expense_categories.keys()))
 
+@dp.message(lambda m: m.text == "💼 Накопления")
+async def savings(message: types.Message):
+    user_state[message.from_user.id] = {"type": "накопление"}
+    await message.answer("Введи сумму накоплений:")
 
-# --- БАЛАНС ---
-@dp.message(lambda m: m.text == "📊 Баланс")
-async def balance_handler(message: types.Message):
+# ====== КАТЕГОРИЯ ======
+
+@dp.message()
+async def handle(message: types.Message):
+    user_id = message.from_user.id
+    text = message.text
+
+    # выбор категории
+    if user_id in user_state and "category" not in user_state[user_id]:
+        if text in expense_categories:
+            user_state[user_id]["category"] = expense_categories[text]
+            await message.answer("Введи сумму:")
+            return
+
+        if text in income_categories:
+            user_state[user_id]["category"] = income_categories[text]
+            await message.answer("Введи сумму:")
+            return
+
+    # ввод суммы
+    if user_id in user_state and "category" in user_state[user_id]:
+        try:
+            amount = float(text)
+        except:
+            await message.answer("Введите число")
+            return
+
+        data = user_state[user_id]
+        now = datetime.now()
+
+        sheet.append_row([
+            now.strftime("%Y-%m-%d"),
+            data["type"],
+            data["category"],
+            amount
+        ])
+
+        await message.answer(
+            f"✅ Записано:\n{data['type']} | {data['category']} | {amount}",
+            reply_markup=main_kb
+        )
+
+        user_state.pop(user_id)
+        return
+
+# ====== АНАЛИТИКА ======
+
+@dp.message(lambda m: m.text == "📊 Аналитика")
+async def analytics(message: types.Message):
     records = sheet.get_all_values()
 
-    income = expense = savings_plus = savings_minus = 0
+    expenses = {}
+
+    for row in records[1:]:
+        if row[1] == "расход":
+            cat = row[2]
+            amt = float(row[3])
+            expenses[cat] = expenses.get(cat, 0) + amt
+
+    plt.figure()
+    plt.bar(expenses.keys(), expenses.values())
+    plt.xticks(rotation=45)
+
+    plt.savefig("chart.png")
+
+    await message.answer_photo(types.FSInputFile("chart.png"))
+
+# ====== ПЛАН VS ФАКТ ======
+
+@dp.message(lambda m: m.text == "📊 План vs Факт")
+async def plan_vs_fact(message: types.Message):
+    records = sheet.get_all_values()
+
+    plan = {}
+    fact = {}
 
     for row in records[1:]:
         try:
-            t = row[1]
-            a = float(row[3])
+            type_ = row[1]
+            category = row[2]
+            amount = float(row[3])
 
-            if t == "доход": income += a
-            elif t == "расход": expense += a
-            elif t == "накопление_плюс": savings_plus += a
-            elif t == "накопление_минус": savings_minus += a
+            if type_ == "план":
+                plan[category] = plan.get(category, 0) + amount
+            elif type_ == "расход":
+                fact[category] = fact.get(category, 0) + amount
         except:
             continue
 
-    balance = income - expense - savings_plus + savings_minus
+    text = "📊 План vs Факт:\n\n"
 
-    await message.answer(f"📊 Баланс: {balance} ₽")
+    categories = set(plan.keys()) | set(fact.keys())
 
+    total_plan = 0
+    total_fact = 0
 
-# --- ГРАФИК ---
-@dp.message(lambda m: m.text == "📊 График расходов")
-async def chart(message: types.Message):
-    records = sheet.get_all_values()
-    mth = datetime.now().strftime("%Y-%m")
+    for cat in categories:
+        p = plan.get(cat, 0)
+        f = fact.get(cat, 0)
 
-    data = {}
+        total_plan += p
+        total_fact += f
 
-    for r in records[1:]:
-        try:
-            if r[1] == "расход" and r[0].startswith(mth):
-                data[r[2]] = data.get(r[2], 0) + float(r[3])
-        except:
-            continue
+        status = "✅" if f <= p else "❌"
 
-    if not data:
-        await message.answer("Нет данных")
-        return
+        text += f"{cat}\nПлан: {p} | Факт: {f} {status}\n\n"
 
-    plt.figure()
-    plt.pie(data.values(), labels=data.keys(), autopct='%1.1f%%')
-    plt.savefig("chart.png")
-    plt.close()
+    text += f"\nИТОГО:\nПлан: {total_plan}\nФакт: {total_fact}"
 
-    with open("chart.png", "rb") as p:
-        await message.answer_photo(p)
+    await message.answer(text)
 
+# ====== ЗАПУСК ======
 
-# --- ОСНОВНАЯ ЛОГИКА ---
-@dp.message()
-async def handle(message: types.Message):
-    t = message.text.strip()
-    uid = message.from_user.id
-
-    if t == "💸 Расходы":
-        await message.answer("Категория 👇", reply_markup=expense_keyboard); return
-    if t == "💰 Доходы":
-        await message.answer("Категория 👇", reply_markup=income_keyboard); return
-    if t == "🏦 Накопления":
-        await message.answer("Действие 👇", reply_markup=savings_keyboard); return
-    if t == "➕ Пополнить":
-        savings_mode[uid] = "плюс"; await message.answer("Сумма?"); return
-    if t == "➖ Снять":
-        savings_mode[uid] = "минус"; await message.answer("Сумма?"); return
-    if t == "⬅️ Назад":
-        await message.answer("Меню", reply_markup=main_keyboard); return
-
-    if uid in savings_mode:
-        try:
-            a = float(t)
-            typ = "накопление_плюс" if savings_mode[uid]=="плюс" else "накопление_минус"
-            sheet.append_row([datetime.now().strftime("%Y-%m-%d"), typ, "Накопления", a])
-            await message.answer("🏦 Готово", reply_markup=main_keyboard)
-            del savings_mode[uid]
-        except:
-            await message.answer("Ошибка")
-        return
-
-    if t in expense_categories:
-        user_state[uid] = ("расход", t)
-        await message.answer("Сумма?"); return
-
-    if t in income_categories:
-        user_state[uid] = ("доход", t)
-        await message.answer("Сумма?"); return
-
-    if uid in user_state:
-        typ, cat = user_state[uid]
-        try:
-            a = float(t)
-            clean = cat.split(" ",1)[1]
-            sheet.append_row([datetime.now().strftime("%Y-%m-%d"), typ, clean, a])
-            await message.answer("✅ Записано", reply_markup=main_keyboard)
-            del user_state[uid]
-        except:
-            await message.answer("Ошибка")
-        return
-
-    await message.answer("Выбери действие 👇", reply_markup=main_keyboard)
-
-
-# --- RUN ---
 async def main():
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
