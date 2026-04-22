@@ -41,8 +41,7 @@ client = gspread.authorize(creds)
 sheet = client.open("Учет расходов и доходов").sheet1
 
 
-# ====== КАТЕГОРИИ ======
-
+# ===== КАТЕГОРИИ =====
 expense_categories = {
     "🏠 ЖКХ": "ЖКХ",
     "🛒 Продукты": "Продукты",
@@ -64,18 +63,9 @@ income_categories = {
     "💰 Аванс Настя": "Аванс Настя"
 }
 
-months_map = {
-    "Январь": 1, "Февраль": 2, "Март": 3,
-    "Апрель": 4, "Май": 5, "Июнь": 6,
-    "Июль": 7, "Август": 8, "Сентябрь": 9,
-    "Октябрь": 10, "Ноябрь": 11, "Декабрь": 12
-}
-
-# ====== СОСТОЯНИЕ ======
 user_state = {}
 
-# ====== КНОПКИ ======
-
+# ===== КНОПКИ =====
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💸 Расходы"), KeyboardButton(text="💰 Доходы")],
@@ -92,42 +82,102 @@ def make_keyboard(items):
         resize_keyboard=True
     )
 
-# ====== START ======
-
+# ===== START =====
 @dp.message(lambda m: m.text == "/start")
 async def start(message: types.Message):
-    await message.answer("Выберите действие:", reply_markup=main_kb)
+    await message.answer("Выбери раздел 👇", reply_markup=main_kb)
 
-# ====== ВЫБОР РАЗДЕЛОВ ======
-
-@dp.message(lambda m: m.text == "💸 Расходы")
+# ===== РАЗДЕЛЫ =====
+@dp.message(lambda m: "расход" in m.text.lower())
 async def expenses(message: types.Message):
     user_state[message.from_user.id] = {"type": "расход"}
     await message.answer("Выбери категорию:", reply_markup=make_keyboard(expense_categories.keys()))
 
-@dp.message(lambda m: m.text == "💰 Доходы")
+@dp.message(lambda m: "доход" in m.text.lower())
 async def income(message: types.Message):
     user_state[message.from_user.id] = {"type": "доход"}
     await message.answer("Выбери категорию:", reply_markup=make_keyboard(income_categories.keys()))
 
-@dp.message(lambda m: m.text == "📌 Планируемые расходы")
+@dp.message(lambda m: "планируемые" in m.text.lower())
 async def planned(message: types.Message):
     user_state[message.from_user.id] = {"type": "план"}
     await message.answer("Выбери категорию:", reply_markup=make_keyboard(expense_categories.keys()))
 
-@dp.message(lambda m: m.text == "💼 Накопления")
+@dp.message(lambda m: "накоп" in m.text.lower())
 async def savings(message: types.Message):
     user_state[message.from_user.id] = {"type": "накопление"}
     await message.answer("Введи сумму накоплений:")
 
-# ====== КАТЕГОРИЯ ======
+# ===== ПЛАН VS ФАКТ =====
+@dp.message(lambda m: m.text and "план" in m.text.lower())
+async def plan_vs_fact(message: types.Message):
+    records = sheet.get_all_values()
 
+    plan = {}
+    fact = {}
+
+    for row in records[1:]:
+        try:
+            type_ = row[1]
+            category = row[2]
+            amount = float(row[3])
+
+            if type_ == "план":
+                plan[category] = plan.get(category, 0) + amount
+            elif type_ == "расход":
+                fact[category] = fact.get(category, 0) + amount
+        except:
+            continue
+
+    text = "📊 План vs Факт:\n\n"
+
+    total_plan = 0
+    total_fact = 0
+
+    categories = set(plan.keys()) | set(fact.keys())
+
+    for cat in categories:
+        p = plan.get(cat, 0)
+        f = fact.get(cat, 0)
+
+        total_plan += p
+        total_fact += f
+
+        status = "✅" if f <= p else "❌"
+
+        text += f"{cat}\nПлан: {p} ₽ | Факт: {f} ₽ {status}\n\n"
+
+    text += f"ИТОГО:\nПлан: {total_plan} ₽\nФакт: {total_fact} ₽"
+
+    await message.answer(text)
+
+# ===== АНАЛИТИКА =====
+@dp.message(lambda m: "аналитика" in m.text.lower())
+async def analytics(message: types.Message):
+    records = sheet.get_all_values()
+
+    expenses = {}
+
+    for row in records[1:]:
+        if row[1] == "расход":
+            cat = row[2]
+            amt = float(row[3])
+            expenses[cat] = expenses.get(cat, 0) + amt
+
+    plt.figure()
+    plt.bar(expenses.keys(), expenses.values())
+    plt.xticks(rotation=45)
+
+    plt.savefig("chart.png")
+
+    await message.answer_photo(types.FSInputFile("chart.png"))
+
+# ===== ОСНОВНАЯ ЛОГИКА =====
 @dp.message()
 async def handle(message: types.Message):
     user_id = message.from_user.id
     text = message.text
 
-    # выбор категории
     if user_id in user_state and "category" not in user_state[user_id]:
         if text in expense_categories:
             user_state[user_id]["category"] = expense_categories[text]
@@ -139,7 +189,6 @@ async def handle(message: types.Message):
             await message.answer("Введи сумму:")
             return
 
-    # ввод суммы
     if user_id in user_state and "category" in user_state[user_id]:
         try:
             amount = float(text)
@@ -165,74 +214,7 @@ async def handle(message: types.Message):
         user_state.pop(user_id)
         return
 
-# ====== АНАЛИТИКА ======
-
-@dp.message(lambda m: m.text == "📊 Аналитика")
-async def analytics(message: types.Message):
-    records = sheet.get_all_values()
-
-    expenses = {}
-
-    for row in records[1:]:
-        if row[1] == "расход":
-            cat = row[2]
-            amt = float(row[3])
-            expenses[cat] = expenses.get(cat, 0) + amt
-
-    plt.figure()
-    plt.bar(expenses.keys(), expenses.values())
-    plt.xticks(rotation=45)
-
-    plt.savefig("chart.png")
-
-    await message.answer_photo(types.FSInputFile("chart.png"))
-
-# ====== ПЛАН VS ФАКТ ======
-
-@dp.message(lambda m: m.text == "📊 План vs Факт")
-async def plan_vs_fact(message: types.Message):
-    records = sheet.get_all_values()
-
-    plan = {}
-    fact = {}
-
-    for row in records[1:]:
-        try:
-            type_ = row[1]
-            category = row[2]
-            amount = float(row[3])
-
-            if type_ == "план":
-                plan[category] = plan.get(category, 0) + amount
-            elif type_ == "расход":
-                fact[category] = fact.get(category, 0) + amount
-        except:
-            continue
-
-    text = "📊 План vs Факт:\n\n"
-
-    categories = set(plan.keys()) | set(fact.keys())
-
-    total_plan = 0
-    total_fact = 0
-
-    for cat in categories:
-        p = plan.get(cat, 0)
-        f = fact.get(cat, 0)
-
-        total_plan += p
-        total_fact += f
-
-        status = "✅" if f <= p else "❌"
-
-        text += f"{cat}\nПлан: {p} | Факт: {f} {status}\n\n"
-
-    text += f"\nИТОГО:\nПлан: {total_plan}\nФакт: {total_fact}"
-
-    await message.answer(text)
-
-# ====== ЗАПУСК ======
-
+# ===== ЗАПУСК =====
 async def main():
     await dp.start_polling(bot)
 
