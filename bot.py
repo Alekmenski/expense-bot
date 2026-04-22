@@ -88,22 +88,22 @@ async def start(message: types.Message):
     await message.answer("Выбери раздел 👇", reply_markup=main_kb)
 
 # ===== РАЗДЕЛЫ =====
-@dp.message(lambda m: "расход" in m.text.lower())
+@dp.message(lambda m: m.text and "расход" in m.text.lower())
 async def expenses(message: types.Message):
     user_state[message.from_user.id] = {"type": "расход"}
     await message.answer("Выбери категорию:", reply_markup=make_keyboard(expense_categories.keys()))
 
-@dp.message(lambda m: "доход" in m.text.lower())
+@dp.message(lambda m: m.text and "доход" in m.text.lower())
 async def income(message: types.Message):
     user_state[message.from_user.id] = {"type": "доход"}
     await message.answer("Выбери категорию:", reply_markup=make_keyboard(income_categories.keys()))
 
-@dp.message(lambda m: "планируемые" in m.text.lower())
+@dp.message(lambda m: m.text and "планируемые" in m.text.lower())
 async def planned(message: types.Message):
     user_state[message.from_user.id] = {"type": "план"}
     await message.answer("Выбери категорию:", reply_markup=make_keyboard(expense_categories.keys()))
 
-@dp.message(lambda m: "накоп" in m.text.lower())
+@dp.message(lambda m: m.text and "накоп" in m.text.lower())
 async def savings(message: types.Message):
     user_state[message.from_user.id] = {"type": "накопление"}
     await message.answer("Введи сумму накоплений:")
@@ -152,7 +152,7 @@ async def plan_vs_fact(message: types.Message):
     await message.answer(text)
 
 # ===== АНАЛИТИКА =====
-@dp.message(lambda m: "аналитика" in m.text.lower())
+@dp.message(lambda m: m.text and "аналитика" in m.text.lower())
 async def analytics(message: types.Message):
     records = sheet.get_all_values()
 
@@ -172,7 +172,7 @@ async def analytics(message: types.Message):
 
     await message.answer_photo(types.FSInputFile("chart.png"))
 
-# ===== ОСНОВНАЯ ЛОГИКА =====
+# ===== ОСНОВНАЯ ЛОГИКА (ВСЕГДА В КОНЦЕ!) =====
 @dp.message()
 async def handle(message: types.Message):
     user_id = message.from_user.id
