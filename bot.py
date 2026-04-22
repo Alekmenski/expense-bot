@@ -40,7 +40,6 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(
 client = gspread.authorize(creds)
 sheet = client.open("Учет расходов и доходов").sheet1
 
-
 # ===== КАТЕГОРИИ =====
 expense_categories = {
     "🏠 ЖКХ": "ЖКХ",
@@ -108,7 +107,7 @@ async def savings(message: types.Message):
     user_state[message.from_user.id] = {"type": "накопление"}
     await message.answer("Введи сумму накоплений:")
 
-# ===== ПЛАН VS ФАКТ =====
+# ===== ПЛАН VS ФАКТ (УЛУЧШЕННЫЙ) =====
 @dp.message(lambda m: m.text and "план" in m.text.lower())
 async def plan_vs_fact(message: types.Message):
     records = sheet.get_all_values()
@@ -129,25 +128,41 @@ async def plan_vs_fact(message: types.Message):
         except:
             continue
 
-    text = "📊 План vs Факт:\n\n"
+    text = "📊 План vs Факт по категориям:\n\n"
 
     total_plan = 0
     total_fact = 0
 
-    categories = set(plan.keys()) | set(fact.keys())
+    categories = sorted(set(plan.keys()) | set(fact.keys()))
 
     for cat in categories:
         p = plan.get(cat, 0)
         f = fact.get(cat, 0)
+        diff = f - p
 
         total_plan += p
         total_fact += f
 
-        status = "✅" if f <= p else "❌"
+        if diff > 0:
+            status = "❌ Перерасход"
+        elif diff < 0:
+            status = "✅ Экономия"
+        else:
+            status = "➖ Ровно"
 
-        text += f"{cat}\nПлан: {p} ₽ | Факт: {f} ₽ {status}\n\n"
+        text += (
+            f"{cat}\n"
+            f"План: {p} ₽\n"
+            f"Факт: {f} ₽\n"
+            f"Разница: {diff:+.0f} ₽ {status}\n\n"
+        )
 
-    text += f"ИТОГО:\nПлан: {total_plan} ₽\nФакт: {total_fact} ₽"
+    text += (
+        f"📌 ИТОГО:\n"
+        f"План: {total_plan} ₽\n"
+        f"Факт: {total_fact} ₽\n"
+        f"Разница: {total_fact - total_plan:+.0f} ₽"
+    )
 
     await message.answer(text)
 
@@ -172,7 +187,7 @@ async def analytics(message: types.Message):
 
     await message.answer_photo(types.FSInputFile("chart.png"))
 
-# ===== ОСНОВНАЯ ЛОГИКА (ВСЕГДА В КОНЦЕ!) =====
+# ===== ОСНОВНАЯ ЛОГИКА (ВСЕГДА В КОНЦЕ) =====
 @dp.message()
 async def handle(message: types.Message):
     user_id = message.from_user.id
