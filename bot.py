@@ -1,4 +1,7 @@
 import asyncio
+import os
+import json
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
@@ -6,10 +9,9 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-
 import matplotlib.pyplot as plt
 
-TOKEN = "8716111682:AAG1waxlJmyPRvDF27fzTIBHG0HptHI1Qg0"
+TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
