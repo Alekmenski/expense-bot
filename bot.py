@@ -22,7 +22,12 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-creds_json = json.loads(os.getenv("GOOGLE_CREDS"))
+raw = os.getenv("GOOGLE_CREDS")
+
+# исправляем переносы строк
+raw = raw.replace('\\n', '\n')
+
+creds_json = json.loads(raw)
 
 creds = ServiceAccountCredentials.from_json_keyfile_dict(
     creds_json, scope
