@@ -2,7 +2,6 @@ import asyncio
 import os
 import json
 
-
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
@@ -12,12 +11,15 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import matplotlib.pyplot as plt
 
+
+# --- TOKEN ---
 TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# --- Google Sheets ---
+
+# --- GOOGLE SHEETS (исправленный вариант 🔥) ---
 scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive"
@@ -25,16 +27,17 @@ scope = [
 
 raw = os.getenv("GOOGLE_CREDS")
 
-# исправляем переносы строк
-raw = raw.replace('\\n', '\n')
+# 🔥 фикс всех проблем с переносами строк
+raw = raw.replace('\n', '\\n')
+raw = raw.replace('\\\\n', '\\n')
 
 creds_json = json.loads(raw)
 
 creds = ServiceAccountCredentials.from_json_keyfile_dict(
     creds_json, scope
 )
-client = gspread.authorize(creds)
 
+client = gspread.authorize(creds)
 sheet = client.open("Учет расходов и доходов").sheet1
 
 
@@ -47,7 +50,7 @@ months_map = {
 }
 
 
-# --- Категории ---
+# --- КАТЕГОРИИ ---
 expense_categories = [
     "🏠 ЖКХ","🛒 Продукты","💊 Лекарства","🚗 Автомобиль",
     "🎉 Развлечения и отдых","👕 Одежда и обувь","🚌 Транспорт",
@@ -60,14 +63,13 @@ income_categories = [
 ]
 
 
-# --- Клавиатуры ---
+# --- КЛАВИАТУРЫ ---
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="💸 Расходы"), KeyboardButton(text="💰 Доходы")],
         [KeyboardButton(text="📅 Планируемые расходы")],
         [KeyboardButton(text="🏦 Накопления")],
         [KeyboardButton(text="📊 Баланс"), KeyboardButton(text="📅 Заработок за месяц")],
-        [KeyboardButton(text="📊 План vs Факт"), KeyboardButton(text="📈 Аналитика расходов")],
         [KeyboardButton(text="📊 График расходов")]
     ],
     resize_keyboard=True
@@ -96,8 +98,6 @@ income_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-plan_keyboard = expense_keyboard
-
 savings_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="➕ Пополнить"), KeyboardButton(text="➖ Снять")],
@@ -107,7 +107,7 @@ savings_keyboard = ReplyKeyboardMarkup(
 )
 
 
-# --- Состояния ---
+# --- СОСТОЯНИЯ ---
 user_state = {}
 plan_mode_users = set()
 savings_mode = {}
@@ -117,48 +117,6 @@ savings_mode = {}
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     await message.answer("Выбери раздел 👇", reply_markup=main_keyboard)
-
-
-# --- ОТЧЕТ ПО МЕСЯЦУ ---
-@dp.message()
-async def month_report(message: types.Message):
-    text = message.text.lower().strip()
-
-    if text not in months_map:
-        return
-
-    month_number = months_map[text]
-    year = datetime.now().strftime("%Y")
-    target = f"{year}-{month_number}"
-
-    records = sheet.get_all_values()
-
-    income = expense = savings_plus = savings_minus = 0
-
-    for row in records[1:]:
-        try:
-            date = row[0]
-            type_ = row[1]
-            amount = float(row[3])
-
-            if date.startswith(target):
-                if type_ == "доход": income += amount
-                elif type_ == "расход": expense += amount
-                elif type_ == "накопление_плюс": savings_plus += amount
-                elif type_ == "накопление_минус": savings_minus += amount
-        except:
-            continue
-
-    balance = income - expense - savings_plus + savings_minus
-
-    await message.answer(
-        f"📅 Отчёт за {text}:\n\n"
-        f"💰 Доходы: {income} ₽\n"
-        f"💸 Расходы: {expense} ₽\n"
-        f"🏦 Накопления: {savings_plus} ₽\n"
-        f"🏦 Снято: {savings_minus} ₽\n\n"
-        f"🟢 Баланс: {balance} ₽"
-    )
 
 
 # --- БАЛАНС ---
@@ -223,9 +181,6 @@ async def handle(message: types.Message):
         await message.answer("Категория 👇", reply_markup=expense_keyboard); return
     if t == "💰 Доходы":
         await message.answer("Категория 👇", reply_markup=income_keyboard); return
-    if t == "📅 Планируемые расходы":
-        plan_mode_users.add(uid)
-        await message.answer("Категория 👇", reply_markup=plan_keyboard); return
     if t == "🏦 Накопления":
         await message.answer("Действие 👇", reply_markup=savings_keyboard); return
     if t == "➕ Пополнить":
@@ -247,7 +202,7 @@ async def handle(message: types.Message):
         return
 
     if t in expense_categories:
-        user_state[uid] = ("план" if uid in plan_mode_users else "расход", t)
+        user_state[uid] = ("расход", t)
         await message.answer("Сумма?"); return
 
     if t in income_categories:
@@ -262,7 +217,6 @@ async def handle(message: types.Message):
             sheet.append_row([datetime.now().strftime("%Y-%m-%d"), typ, clean, a])
             await message.answer("✅ Записано", reply_markup=main_keyboard)
             del user_state[uid]
-            plan_mode_users.discard(uid)
         except:
             await message.answer("Ошибка")
         return
@@ -273,6 +227,7 @@ async def handle(message: types.Message):
 # --- RUN ---
 async def main():
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
